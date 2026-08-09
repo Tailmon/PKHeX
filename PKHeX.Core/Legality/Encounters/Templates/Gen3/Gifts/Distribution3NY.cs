@@ -21,49 +21,56 @@ public enum Distribution3NY : byte
 
 public static class Gen3PCNY
 {
+    // PCNYa never existed -- the memory card labelled "A" in produced OT: PCNYc
     private const string B = "PCNYb";
     private const string C = "PCNYc";
     private const string D = "PCNYd";
 
-    public static bool IsValidTrainerID(this Distribution3NY dist, ushort tid) => tid is (not 0) and < 3000;
-
-    public static ushort GetTrainerID(this Distribution3NY dist) => (ushort)Util.Rand.Next(1, 3000);
-
-    public static bool IsValidTrainerName(this Distribution3NY dist, ReadOnlySpan<char> name) => dist switch
+    extension(Distribution3NY dist)
     {
-        Evolution => name is B or C,
+        public bool IsValidTrainerID(ushort tid) => tid is (not 0) and < 3000;
+        public ushort GetTrainerID() => (ushort)Util.Rand.Next(1, 3000);
 
-        Dragon => name is C or D,
+        public bool IsValidTrainerName(ReadOnlySpan<char> name) => dist switch
+        {
+            Evolution => name is B or C,
 
-        Monster => name is B or C,
-        Halloween => name is B or C,
-        EXDragon => name is B or C,
+            Dragon => name is B or C or D, // only C and D, but B was used temporarily by staff to acquire some in the event of machine downtime
 
-        UnknownSpring => name is C or D,
-        Colosseum => name is C or D,
-        Box => name is C or D,
-        BabyTrade => name is C or D,
-        SlitherSwim => name is C or D,
-        AncientAliens => name is C or D,
-        Sixth => name is C or D,
-        _ => throw new ArgumentOutOfRangeException(nameof(dist), dist, null),
-    };
+            Monster => name is B or C,
+            Halloween => name is B or C,
+            EXDragon => name is B or C,
 
-    public static string GetTrainerName(this Distribution3NY dist, bool pivot) => dist switch
-    {
-        Evolution => pivot ? C : B,
-        Dragon => pivot ? D : C,
-        Monster => pivot ? C : B,
-        Halloween => pivot ? C : B,
-        EXDragon => pivot ? C : B,
+            UnknownSpring => name is C or D,
+            Colosseum => name is C or D,
+            Box => name is C or D,
 
-        UnknownSpring => pivot ? D : C,
-        Colosseum => pivot ? D : C,
-        Box => pivot ? D : C,
-        BabyTrade => pivot ? D : C,
-        SlitherSwim => pivot ? D : C,
-        AncientAliens => pivot ? D : C,
-        Sixth => pivot ? D : C,
-        _ => throw new ArgumentOutOfRangeException(nameof(dist), dist, null),
-    };
+            BabyTrade => name is D,
+            SlitherSwim => name is D,
+            AncientAliens => name is D,
+            Sixth => name is D,
+            _ => throw new ArgumentOutOfRangeException(nameof(dist), dist, null),
+        };
+
+        public string GetTrainerName(bool pivot) => dist switch
+        {
+            Evolution => pivot ? C : B,
+
+            Dragon => pivot ? D : C, // B was used temporarily by staff to acquire some in the event of machine downtime; don't use to generate.
+
+            Monster => pivot ? C : B,
+            Halloween => pivot ? C : B,
+            EXDragon => pivot ? C : B,
+
+            UnknownSpring => pivot ? D : C,
+            Colosseum => pivot ? D : C,
+            Box => pivot ? D : C,
+
+            BabyTrade => D,
+            SlitherSwim => D,
+            AncientAliens => D,
+            Sixth => D,
+            _ => throw new ArgumentOutOfRangeException(nameof(dist), dist, null),
+        };
+    }
 }

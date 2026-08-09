@@ -68,16 +68,16 @@ public sealed class SlotEditor<T>(SaveFile SAV)
         if (!dest.CanWriteTo(SAV))
             return SlotTouchResult.FailDestination;
 
-        const PKMImportSetting skip = PKMImportSetting.Skip;
+        var settings = EntityImportSettings.None;
         var s = source.Read(SAV);
         var d = dest.Read(SAV);
-        WriteSlot(source, s, SlotTouchType.None, skip);
-        WriteSlot(dest, d, SlotTouchType.Swap, skip);
+        WriteSlot(source, s, SlotTouchType.None, settings);
+        WriteSlot(dest, d, SlotTouchType.Swap, settings);
 
         return SlotTouchResult.Success;
     }
 
-    private bool WriteSlot(ISlotInfo slot, PKM pk, SlotTouchType type = SlotTouchType.Set, PKMImportSetting setDetail = PKMImportSetting.UseDefault)
+    private bool WriteSlot(ISlotInfo slot, PKM pk, SlotTouchType type = SlotTouchType.Set, EntityImportSettings setDetail = default)
     {
         Changelog.AddNewChange(slot);
         var result = slot.WriteTo(SAV, pk, setDetail);
@@ -89,9 +89,13 @@ public sealed class SlotEditor<T>(SaveFile SAV)
     private bool DeleteSlot(ISlotInfo slot)
     {
         var pk = SAV.BlankPKM;
-        return WriteSlot(slot, pk, SlotTouchType.Delete, PKMImportSetting.Skip);
+        var settings = EntityImportSettings.None;
+        return WriteSlot(slot, pk, SlotTouchType.Delete, settings);
     }
 
+    /// <summary>
+    /// Undo the last change made to a slot.
+    /// </summary>
     public void Undo()
     {
         if (!Changelog.CanUndo)
@@ -100,6 +104,9 @@ public sealed class SlotEditor<T>(SaveFile SAV)
         NotifySlotChanged(slot, SlotTouchType.Delete, slot.Read(SAV));
     }
 
+    /// <summary>
+    /// Redo the last undone change made to a slot.
+    /// </summary>
     public void Redo()
     {
         if (!Changelog.CanRedo)

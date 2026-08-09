@@ -73,7 +73,9 @@ public partial class SAV_Pokepuff : Form
     {
         if (e.ColumnIndex != 1)
             return;
-        ((ComboBox)((DataGridView)sender).EditingControl).DroppedDown = true;
+        if (sender is not DataGridView { EditingControl: ComboBox cb })
+            return;
+        cb.DroppedDown = true;
     }
 
     private void B_Cancel_Click(object sender, EventArgs e)
@@ -106,7 +108,7 @@ public partial class SAV_Pokepuff : Form
         for (int i = 0; i < dgv.Rows.Count; i++)
         {
             var puff = dgv.Rows[i].Cells[1].Value?.ToString();
-            int index = (byte)Array.IndexOf(pfa, puff);
+            int index = (byte)pfa.IndexOf(puff);
             puffs[i] = (byte)index;
         }
         return puffs;

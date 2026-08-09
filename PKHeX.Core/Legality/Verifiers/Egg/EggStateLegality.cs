@@ -59,11 +59,14 @@ public static class EggStateLegality
         return pk.PersonalInfo.HatchCycles;
     }
 
+    public const byte EggLevel23 = 5;
+    public const byte EggLevel = 1;
+
     /// <summary>
     /// Level which eggs are given to the player.
     /// </summary>
     /// <param name="generation">Generation the egg is given in</param>
-    public static byte GetEggLevel(byte generation) => generation >= 4 ? (byte)1 : (byte)5;
+    public static byte GetEggLevel(byte generation) => generation >= 4 ? EggLevel : EggLevel23;
 
     public const byte EggMetLevel34 = 0;
     public const byte EggMetLevel = 1;
@@ -125,11 +128,11 @@ public static class EggStateLegality
     /// <summary>
     /// Gets a valid <see cref="PKM.MetLocation"/> for an egg hatched in the origin game, accounting for future format transfers altering the data.
     /// </summary>
-    public static ushort GetEggHatchLocation(GameVersion game, byte format) => game switch
+    public static ushort GetEggHatchLocation(GameVersion version, byte format) => version switch
     {
         R or S or E or FR or LG => format switch
         {
-            3 => game is FR or LG ? Locations.HatchLocationFRLG : Locations.HatchLocationRSE,
+            3 => version is FR or LG ? Locations.HatchLocationFRLG : Locations.HatchLocationRSE,
             4 => Locations.Transfer3, // Pal Park
             _ => Locations.Transfer4,
         },

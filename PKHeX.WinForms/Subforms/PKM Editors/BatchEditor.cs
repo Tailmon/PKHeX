@@ -14,7 +14,7 @@ public partial class BatchEditor : Form
     private readonly SaveFile SAV;
 
     // Mass Editing
-    private Core.BatchEditor editor = new();
+    private EntityBatchProcessor editor = new();
     private readonly EntityInstructionBuilder UC_Builder;
 
     private static string LastUsedCommands = string.Empty;
@@ -26,9 +26,9 @@ public partial class BatchEditor : Form
         var above = FLP_RB.Location;
         UC_Builder = new EntityInstructionBuilder(() => pk)
         {
-            Location = new() { Y = above.Y + FLP_RB.Height + 6, X = above.X + 1 },
+            Location = new() { Y = above.Y + FLP_RB.Height + 4 - 1, X = above.X + 1 },
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-            Width = B_Add.Location.X - above.X - 6,
+            Width = B_Add.Location.X - above.X - 2,
         };
         Controls.Add(UC_Builder);
         SAV = sav;
@@ -36,7 +36,7 @@ public partial class BatchEditor : Form
         DragEnter += TabMain_DragEnter;
 
         RTB_Instructions.Text = LastUsedCommands;
-        Closing += (_, _) => LastUsedCommands = RTB_Instructions.Text;
+        FormClosing += (_, _) => LastUsedCommands = RTB_Instructions.Text;
     }
 
     private void B_Open_Click(object sender, EventArgs e)
@@ -135,15 +135,15 @@ public partial class BatchEditor : Form
 
         foreach (var set in sets)
         {
-            BatchEditing.ScreenStrings(set.Filters);
-            BatchEditing.ScreenStrings(set.Instructions);
+            EntityBatchEditor.ScreenStrings(set.Filters);
+            EntityBatchEditor.ScreenStrings(set.Instructions);
         }
         RunBatchEdit(sets, TB_Folder.Text, destPath);
     }
 
     private void RunBatchEdit(StringInstructionSet[] sets, string source, string? destination)
     {
-        editor = new Core.BatchEditor();
+        editor = new EntityBatchProcessor();
         bool finished = false, displayed = false; // hack cuz DoWork event isn't cleared after completion
         b.DoWork += (_, _) =>
         {
@@ -153,7 +153,7 @@ public partial class BatchEditor : Form
                 RunBatchEditSaveFile(sets, boxes: true);
             else if (RB_Party.Checked)
                 RunBatchEditSaveFile(sets, party: true);
-            else if (destination != null)
+            else if (destination is not null)
                 RunBatchEditFolder(sets, source, destination);
             finished = true;
         };
@@ -185,7 +185,7 @@ public partial class BatchEditor : Form
             SlotInfoLoader.AddPartyData(SAV, data);
             process(data);
             foreach (var slot in data)
-                slot.Source.WriteTo(SAV, slot.Entity, PKMImportSetting.Skip);
+                slot.Source.WriteTo(SAV, slot.Entity, EntityImportSettings.None);
         }
         if (boxes)
         {
@@ -193,7 +193,7 @@ public partial class BatchEditor : Form
             SlotInfoLoader.AddBoxData(SAV, data);
             process(data);
             foreach (var slot in data)
-                slot.Source.WriteTo(SAV, slot.Entity, PKMImportSetting.Skip);
+                slot.Source.WriteTo(SAV, slot.Entity, EntityImportSettings.None);
         }
         void process(IList<SlotCache> d)
         {
@@ -219,17 +219,19 @@ public partial class BatchEditor : Form
         if (data.Count == 0)
             return;
 
+        // Pull out any filter meta instructions from the filters.
         var filterMeta = Filters.Where(f => BatchFilters.FilterMeta.Any(z => z.IsMatch(f.PropertyName))).ToArray();
         if (filterMeta.Length != 0)
             Filters = Filters.Except(filterMeta).ToArray();
 
-        var max = data[0].Entity.MaxSpeciesID;
+        var max = SAV.MaxSpeciesID;
 
         for (int i = 0; i < data.Count; i++)
         {
             var entry = data[i];
-            var pk = data[i].Entity;
+            var pk = entry.Entity;
 
+            // Ignore empty/invalid slots.
             var spec = pk.Species;
             if (spec == 0 || spec > max)
             {
@@ -239,7 +241,7 @@ public partial class BatchEditor : Form
 
             if (entry.Source is SlotInfoBox info && SAV.GetBoxSlotFlags(info.Box, info.Slot).IsOverwriteProtected())
                 editor.AddSkipped();
-            else if (!BatchEditing.IsFilterMatchMeta(filterMeta, entry))
+            else if (!EntityBatchEditor.IsFilterMatchMeta(filterMeta, entry))
                 editor.AddSkipped();
             else
                 editor.Process(pk, Filters, Instructions);
@@ -269,18 +271,23 @@ public partial class BatchEditor : Form
 
         byte[] data = File.ReadAllBytes(source);
         _ = FileUtil.TryGetPKM(data, out var pk, fi.Extension, SAV);
-        if (pk == null)
+        if (pk is null)
             return;
 
-        var info = new SlotInfoFile(source);
+        var info = new SlotInfoFileSingle(source);
         var entry = new SlotCache(info, pk);
-        if (!BatchEditing.IsFilterMatchMeta(metaFilters, entry))
+        if (!EntityBatchEditor.IsFilterMatchMeta(metaFilters, entry))
         {
             editor.AddSkipped();
             return;
         }
 
         if (editor.Process(pk, pkFilters, instructions))
-            File.WriteAllBytes(Path.Combine(destDir, Path.GetFileName(source)), pk.DecryptedPartyData);
+        {
+            Span<byte> result = stackalloc byte[pk.SIZE_PARTY];
+            pk.ForcePartyData();
+            pk.WriteDecryptedDataParty(result);
+            File.WriteAllBytes(Path.Combine(destDir, Path.GetFileName(source)), result);
+        }
     }
 }

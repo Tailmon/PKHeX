@@ -21,18 +21,16 @@ public abstract class GBPKM : PKM
     public sealed override ReadOnlySpan<ushort> ExtraBytes => [];
 
     protected GBPKM([ConstantExpected] int size) : base(size) { }
-    protected GBPKM(byte[] data) : base(data) { }
+    protected GBPKM(Memory<byte> data) : base(data) { }
 
-    public sealed override byte[] EncryptedPartyData => Encrypt();
-    public sealed override byte[] EncryptedBoxData => Encrypt();
-    public sealed override byte[] DecryptedBoxData => Encrypt();
-    public sealed override byte[] DecryptedPartyData => Encrypt();
+    protected override void EncryptStored(Span<byte> stored) { }
+    protected override void EncryptParty(Span<byte> party) { }
 
     public override bool Valid { get => true; set { } }
     public sealed override void RefreshChecksum() { }
 
-    private bool? _isnicknamed;
-    protected abstract void GetNonNickname(int language, Span<byte> data);
+    private protected bool? _isnicknamed;
+    protected abstract int GetNonNickname(int language, Span<byte> data);
 
     public sealed override bool IsNicknamed
     {
@@ -41,11 +39,8 @@ public abstract class GBPKM : PKM
             if (_isnicknamed is {} actual)
                 return actual;
 
-            var current = NicknameTrash;
-            Span<byte> expect = stackalloc byte[current.Length];
             var language = GuessedLanguage();
-            GetNonNickname(language, expect);
-            var result = !current.SequenceEqual(expect);
+            bool result = GetIsNicknamedTrash(language);
             _isnicknamed = result;
             return result;
         }
@@ -57,17 +52,25 @@ public abstract class GBPKM : PKM
         }
     }
 
-    protected bool IsNicknamedBank
+    private bool GetIsNicknamedTrash(int language)
     {
-        get
-        {
-            var spName = SpeciesName.GetSpeciesNameGeneration(Species, GuessedLanguage(), Format);
-
-            Span<char> nickname = stackalloc char[TrashCharCountNickname];
-            int len = LoadString(NicknameTrash, nickname);
-            return !nickname[..len].SequenceEqual(spName);
-        }
+        // Verify that all trash bytes match the expected nickname.
+        var current = NicknameTrash;
+        Span<byte> expect = stackalloc byte[current.Length];
+        GetNonNickname(language, expect);
+        return !current.SequenceEqual(expect);
     }
+
+    private bool GetIsNicknamedLength(int language)
+    {
+        // Verify that only the displayed nickname bytes match the expected nickname.
+        var current = NicknameTrash;
+        Span<byte> expect = stackalloc byte[current.Length];
+        int length = GetNonNickname(language, expect);
+        return !current[..length].SequenceEqual(expect[..length]);
+    }
+
+    protected bool IsNicknamedBank => GetIsNicknamedLength(GuessedLanguage());
 
     public sealed override int Language
     {
@@ -82,7 +85,7 @@ public abstract class GBPKM : PKM
 
             Span<char> nickname = stackalloc char[TrashCharCountNickname];
             int len = StringConverter1.LoadString(NicknameTrash, nickname, false);
-            int lang = SpeciesName.GetSpeciesNameLanguage(Species, nickname[..len], Format);
+            int lang = SpeciesName.GetSpeciesNameLanguage(Species, nickname[..len], Context);
             if (lang > 0)
                 return lang;
             return 0;
@@ -134,7 +137,7 @@ public abstract class GBPKM : PKM
     public sealed override ushort SID16 { get => 0; set { } }
     #endregion
 
-    public sealed override bool IsShiny => IV_DEF == 10 && IV_SPE == 10 && IV_SPC == 10 && (IV_ATK & 2) == 2;
+    public sealed override bool IsShiny => ShinyUtil.GetIsShinyGB(DV16);
     private int HPBitValPower => ((IV_ATK & 8) >> 0) | ((IV_DEF & 8) >> 1) | ((IV_SPE & 8) >> 2) | ((IV_SPC & 8) >> 3);
     public sealed override int HPPower => (((5 * HPBitValPower) + (IV_SPC & 3)) >> 1) + 31;
 
@@ -232,7 +235,7 @@ public abstract class GBPKM : PKM
         stats[5] = GetStat(p.SPD, IV_SPD, EV_SPD, lv);
     }
 
-    protected static ushort GetStat(int baseStat, int iv, int effort, int level)
+    protected static ushort GetStat(int baseStat, int iv, int effort, byte level)
     {
         // The games store a precomputed ushort[256] i^2 table for all ushort->byte square root calculations.
         // The game then iterates to find the lowest index with a value >= input (effort).
@@ -281,5 +284,18 @@ public abstract class GBPKM : PKM
 
         if (pk.HasMove((int)Move.HiddenPower))
             HPType = pk.HPType;
+    }
+
+    public void SetSqrtEVs(ReadOnlySpan<int> evs)
+    {
+        EV_HP = Square(evs[0]);
+        EV_ATK = Square(evs[1]);
+        EV_DEF = Square(evs[2]);
+        EV_SPE = Square(evs[3]);
+        EV_SPC = Square(evs[4]);
+
+        return;
+
+        static ushort Square(int ev) => (ushort)(Math.Min(EffortValues.Max12, ev * ev));
     }
 }

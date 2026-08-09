@@ -5,7 +5,7 @@ using static System.Buffers.Binary.BinaryPrimitives;
 namespace PKHeX.Core;
 
 /// <summary>
-/// <see cref="GameVersion.Gen4"/> encounter area
+/// <see cref="EntityContext.Gen4"/> encounter area
 /// </summary>
 public sealed record EncounterArea4 : IEncounterArea<EncounterSlot4>, IGroundTypeTile, IAreaLocation
 {
@@ -19,22 +19,22 @@ public sealed record EncounterArea4 : IEncounterArea<EncounterSlot4>, IGroundTyp
 
     public bool IsMatchLocation(ushort location) => location == Location;
 
-    public static EncounterArea4[] GetAreas(BinLinkerAccessor input, [ConstantExpected] GameVersion game)
+    public static EncounterArea4[] GetAreas(BinLinkerAccessor input, [ConstantExpected] GameVersion version)
     {
         var result = new EncounterArea4[input.Length];
         for (int i = 0; i < result.Length; i++)
-            result[i] = new EncounterArea4(input[i], game);
+            result[i] = new EncounterArea4(input[i], version);
         return result;
     }
 
-    private EncounterArea4(ReadOnlySpan<byte> data, [ConstantExpected] GameVersion game)
+    private EncounterArea4(ReadOnlySpan<byte> data, [ConstantExpected] GameVersion version)
     {
         Location = data[0];
         // data[1] is unused because location is always <= 255.
         Type = (SlotType4)data[2];
         Rate = data[3];
-        Version = game;
-        // although GroundTilePermission flags are 32bit, none have values > 16bit.
+        Version = version;
+        // although flags are 32bit, none have values > 16bit.
         GroundTile = (GroundTileAllowed)ReadUInt16LittleEndian(data[4..]);
 
         Slots = ReadRegularSlots(data[6..]);
@@ -128,12 +128,9 @@ public sealed record EncounterArea4 : IEncounterArea<EncounterSlot4>, IGroundTyp
         58, // 20 Floaroma Meadow
     ];
 
-    public static bool IsUnownFormValid(PKM pk, byte form)
-    {
-        return pk.HGSS
-            ?   RuinsOfAlph4.IsUnownFormValid(pk, form)
-            : SolaceonRuins4.IsUnownFormValid(pk, form);
-    }
+    public static bool IsUnownFormValid(PKM pk, byte form, bool isRuinsOfAlph) => isRuinsOfAlph
+        ?   RuinsOfAlph4.IsFormValid(pk, form)
+        : SolaceonRuins4.IsFormValid(pk, form);
 }
 
 /// <summary>
@@ -143,28 +140,57 @@ public sealed record EncounterArea4 : IEncounterArea<EncounterSlot4>, IGroundTyp
 /// Different from <see cref="GroundTileAllowed"/>, this corresponds to the method that the <see cref="IEncounterTemplate"/> may be encountered.</remarks>
 public enum SlotType4 : byte
 {
+    /// <summary> Grass tiles </summary>
     Grass = 0,
+    /// <summary> Water tiles </summary>
     Surf = 1,
+    /// <summary> Fishing with Old Rod </summary>
     Old_Rod = 2,
+    /// <summary> Fishing with Good Rod </summary>
     Good_Rod = 3,
+    /// <summary> Fishing with Super Rod </summary>
     Super_Rod = 4,
+    /// <summary> Using Rock Smash move </summary>
     Rock_Smash = 5,
 
+    /// <summary> Using Headbutt on capable trees </summary>
     Headbutt = 6,
+    /// <summary> Using Headbutt on special trees </summary>
     HeadbuttSpecial = 7,
+    /// <summary> Grass tiles during a Bug Catching Contest </summary>
     BugContest = 8,
+    /// <summary> Shaking Honey Trees </summary>
     HoneyTree = 9,
 
+    /// <summary> Grass tiles in the Safari Zone </summary>
     Safari_Grass = 10,
+    /// <summary> Water tiles in the Safari Zone </summary>
     Safari_Surf = 11,
+    /// <summary> Fishing with Old Rod in the Safari Zone </summary>
     Safari_Old_Rod = 12,
+    /// <summary> Fishing with Good Rod in the Safari Zone </summary>
     Safari_Good_Rod = 13,
+    /// <summary> Fishing with Super Rod in the Safari Zone </summary>
     Safari_Super_Rod = 14,
 }
 
 public static class SlotType4Extensions
 {
-    public static bool IsSafari(this SlotType4 type) => type >= SlotType4.Safari_Grass;
-    public static bool IsLevelRandDPPt(this SlotType4 type) => type != SlotType4.Grass;
-    public static bool IsLevelRandHGSS(this SlotType4 type) => type != SlotType4.Grass && !type.IsSafari();
+    extension(SlotType4 type)
+    {
+        /// <summary>
+        /// Checks if the <see cref="type"/> is an encounter within the Safari Zone.
+        /// </summary>
+        public bool IsSafari => type >= SlotType4.Safari_Grass;
+
+        /// <summary>
+        /// Checks if the <see cref="type"/> has a level range that is random. For D/P/Pt; this is all types except Grass.
+        /// </summary>
+        public bool IsLevelRandDPPt => type != SlotType4.Grass;
+
+        /// <summary>
+        /// Checks if the <see cref="type"/> has a level range that is random. For HG/SS; this is all types except Grass and Safari.
+        /// </summary>
+        public bool IsLevelRandHGSS => type != SlotType4.Grass && !type.IsSafari;
+    }
 }

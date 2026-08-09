@@ -5,41 +5,42 @@ namespace PKHeX.Core;
 /// <summary>
 /// Generation 4 Trade Encounter with a fixed PID value.
 /// </summary>
-public sealed record EncounterTrade4PID
-    : IEncounterable, IEncounterMatch, IFixedTrainer, IFixedNickname, IEncounterConvertible<PK4>, IContestStatsReadOnly, IMoveset, IFixedGender, IFixedNature
+public sealed record EncounterTrade4PID : IEncounterable, IEncounterMatch, IEncounterConvertible<PK4>,
+    IFixedTrainer, IFixedNickname, IFixedIVSet, IContestStatsReadOnly, IMoveset, IFixedGender, IFixedNature, ITrainerID32ReadOnly
 {
     public byte Generation => 4;
     public EntityContext Context => EntityContext.Gen4;
     public Shiny Shiny => Shiny.FixedValue;
     public bool IsFixedNickname => true;
-    public GameVersion Version { get; }
     public bool IsEgg => false;
-    public ushort EggLocation => 0;
+    ushort ILocation.EggLocation => 0;
     public Ball FixedBall => Ball.Poke;
     public bool IsShiny => false;
     public bool IsFixedTrainer => true;
     public byte LevelMin => Level;
-    public byte LevelMax => MetLocation == default ? Level : (byte)100;
+    public byte LevelMax => IsMetUnset ? Level : (byte)100;
+    public ushort Location => IsMetUnset ? Locations.LinkTrade4NPC : MetLocation;
 
-    private readonly string[] TrainerNames;
-    private readonly string[] Nicknames;
+    private readonly ReadOnlyMemory<string> TrainerNames;
+    private readonly ReadOnlyMemory<string> Nicknames;
 
     public ushort Species { get; }
     public byte Level { get; }
+    public GameVersion Version { get; }
     public required AbilityPermission Ability { get; init; }
     public required byte OTGender { get; init; }
     public required ushort TID16 { get; init; }
     public required ushort SID16 { get; init; }
     public required byte Gender { get; init; }
     public required IndividualValueSet IVs { get; init; }
+    public Moveset Moves { get; init; }
+    public byte MetLocation { get; init; } // only set by Shuckle and Spearow in HG/SS
+    public byte Contest { get; init; }
+
     public Nature Nature => (Nature)(PID % 25);
     public byte Form => 0;
-    private uint ID32 => (uint)(TID16 | (SID16 << 16));
-
-    public Moveset Moves { get; init; }
-
-    public byte MetLocation { get; init; }
-    public ushort Location => MetLocation == default ? Locations.LinkTrade4NPC : MetLocation;
+    public uint ID32 => (uint)(TID16 | (SID16 << 16));
+    private bool IsMetUnset => MetLocation == 0;
 
     /// <summary>
     /// Fixed <see cref="PKM.PID"/> value the encounter must have.
@@ -50,29 +51,16 @@ public sealed record EncounterTrade4PID
     public string Name => _name;
     public string LongName => _name;
 
-    public byte ContestCool { get; private init; }
-    public byte ContestBeauty { get; private init; }
-    public byte ContestCute { get; private init; }
-    public byte ContestSmart { get; private init; }
-    public byte ContestTough { get; private init; }
+    public byte ContestCool => Contest;
+    public byte ContestBeauty => Contest;
+    public byte ContestCute => Contest;
+    public byte ContestSmart => Contest;
+    public byte ContestTough => Contest;
     public byte ContestSheen => 0;
 
-    public byte Contest
+    public EncounterTrade4PID(ReadOnlySpan<string[]> names, byte index, GameVersion version, uint pid, ushort species, byte level)
     {
-        init
-        {
-            ContestCool = value;
-            ContestBeauty = value;
-            ContestCute = value;
-            ContestSmart = value;
-            ContestTough = value;
-            //ContestSheen = value;
-        }
-    }
-
-    public EncounterTrade4PID(ReadOnlySpan<string[]> names, byte index, GameVersion game, uint pid, ushort species, byte level)
-    {
-        Version = game;
+        Version = version;
         Nicknames = EncounterUtil.GetNamesForLanguage(names, index);
         TrainerNames = EncounterUtil.GetNamesForLanguage(names, (uint)(index + (names[1].Length >> 1)));
         PID = pid;
@@ -89,8 +77,8 @@ public sealed record EncounterTrade4PID
 
     public PK4 ConvertToPKM(ITrainerInfo tr, EncounterCriteria criteria)
     {
+        int language = (int)Language.GetSafeLanguage456((LanguageID)tr.Language);
         var version = this.GetCompatibleVersion(tr.Version);
-        int lang = (int)Language.GetSafeLanguage(Generation, (LanguageID)tr.Language, version);
         var pi = PersonalTable.DP[Species];
         var pk = new PK4
         {
@@ -106,14 +94,14 @@ public sealed record EncounterTrade4PID
 
             ID32 = ID32,
             Version = version,
-            Language = GetReceivedLanguage(lang, version),
+            Language = GetReceivedLanguage(language, version),
             OriginalTrainerGender = OTGender,
-            OriginalTrainerName = TrainerNames[lang],
+            OriginalTrainerName = TrainerNames.Span[language],
 
             OriginalTrainerFriendship = pi.BaseFriendship,
 
             IsNicknamed = true,
-            Nickname = Nicknames[lang],
+            Nickname = Nicknames.Span[language],
 
             HandlingTrainerName = tr.OT,
             HandlingTrainerGender = tr.Gender,
@@ -133,10 +121,10 @@ public sealed record EncounterTrade4PID
         return pk;
     }
 
-    private int GetReceivedLanguage(int lang, GameVersion game)
+    private int GetReceivedLanguage(int lang, GameVersion version)
     {
         if (Version == GameVersion.DPPt)
-            return GetLanguageDPPt(lang, game);
+            return GetLanguageDPPt(lang, version);
 
         // HG/SS
         // Has English Language ID for all except English origin, which is French
@@ -145,13 +133,13 @@ public sealed record EncounterTrade4PID
         return lang;
     }
 
-    private int GetLanguageDPPt(int lang, GameVersion game)
+    private int GetLanguageDPPt(int lang, GameVersion version)
     {
         // Has German Language ID for all except German origin, which is English
         if (Species == (int)Core.Species.Magikarp)
             return (int)(lang == (int)LanguageID.German ? LanguageID.English : LanguageID.German);
         // All other trades received (D/P only): English games have a Japanese language ID instead of English.
-        if (game is not GameVersion.Pt && lang == (int)LanguageID.English)
+        if (version is not GameVersion.Pt && lang == (int)LanguageID.English)
             return (int)LanguageID.Japanese;
         return lang;
     }
@@ -160,9 +148,9 @@ public sealed record EncounterTrade4PID
 
     #region Matching
 
-    public bool IsTrainerMatch(PKM pk, ReadOnlySpan<char> trainer, int language) => (uint)language < TrainerNames.Length && trainer.SequenceEqual(TrainerNames[language]);
-    public bool IsNicknameMatch(PKM pk, ReadOnlySpan<char> nickname, int language) => (uint)language < Nicknames.Length && nickname.SequenceEqual(Nicknames[language]);
-    public string GetNickname(int language) => (uint)language < Nicknames.Length ? Nicknames[language] : Nicknames[0];
+    public bool IsTrainerMatch(PKM pk, ReadOnlySpan<char> trainer, int language) => (uint)language < TrainerNames.Length && trainer.SequenceEqual(TrainerNames.Span[language]);
+    public bool IsNicknameMatch(PKM pk, ReadOnlySpan<char> nickname, int language) => (uint)language < Nicknames.Length && nickname.SequenceEqual(Nicknames.Span[language]);
+    public string GetNickname(int language) => Nicknames.Span[(uint)language < Nicknames.Length ? language : 0];
 
     public bool IsMatchExact(PKM pk, EvoCriteria evo)
     {
@@ -180,7 +168,7 @@ public sealed record EncounterTrade4PID
             return false;
         if (pk.OriginalTrainerGender != OTGender)
             return false;
-        if (!IsMatchEggLocation(pk))
+        if (!this.IsMatchEggLocation(pk))
             return false;
         if (pk is IContestStatsReadOnly s && s.IsContestBelow(this))
             return false;
@@ -202,7 +190,7 @@ public sealed record EncounterTrade4PID
         if (pk.Format != 4) // Met Level lost on PK4=>PK5
             return evo.LevelMax >= Level;
 
-        if (MetLocation != default)
+        if (!IsMetUnset)
             return pk.MetLevel == Level;
         return pk.MetLevel >= LevelMin;
     }
@@ -216,17 +204,17 @@ public sealed record EncounterTrade4PID
         return true;
     }
 
-    private bool IsMatchEggLocation(PKM pk)
-    {
-        var expect = EggLocation;
-        if (pk is PB8)
-            expect = Locations.Default8bNone;
-        return pk.EggLocation == expect;
-    }
-
     public EncounterMatchRating GetMatchRating(PKM pk) => EncounterMatchRating.Match;
 
     #endregion
+
+    /// <summary>
+    /// Language obtained by the trainer will be of a foreign language ID.
+    /// </summary>
+    /// <remarks>
+    /// Does NOT indicate for bugged D/P English origin, which is Japanese.
+    /// </remarks>
+    public bool IsLanguageSwap => Species is (ushort)Core.Species.Magikarp or (ushort)Core.Species.Pikachu;
 
     public int DetectOriginalLanguage(PKM pk)
     {
@@ -247,7 +235,7 @@ public sealed record EncounterTrade4PID
         var len = pk.LoadString(pk.OriginalTrainerTrash, trainer);
         trainer = trainer[..len];
 
-        var expect = TrainerNames[1];
+        var expect = TrainerNames.Span[(int)LanguageID.Japanese];
         var match = trainer.SequenceEqual(expect);
         if (!match)
             return 2; // verify strings with English locale instead.
@@ -267,7 +255,8 @@ public sealed record EncounterTrade4PID
             var len = pk.LoadString(pk.NicknameTrash, nickname);
             nickname = nickname[..len];
 
-            return nickname.SequenceEqual(Nicknames[(int)LanguageID.French]) ? (int)LanguageID.French : (int)LanguageID.Spanish; // Spanish is same as English
+            var french = Nicknames.Span[(int)LanguageID.French];
+            return nickname.SequenceEqual(french) ? (int)LanguageID.French : (int)LanguageID.Spanish; // Spanish is same as English
         }
 
         return lang;
@@ -286,18 +275,20 @@ public sealed record EncounterTrade4PID
             var len = pk.LoadString(pk.NicknameTrash, nickname);
             nickname = nickname[..len];
 
-            return nickname.SequenceEqual(Nicknames[(int)LanguageID.Italian]) ? (int)LanguageID.Italian : (int)LanguageID.Spanish;
+            var italian = Nicknames.Span[(int)LanguageID.Italian];
+            return nickname.SequenceEqual(italian) ? (int)LanguageID.Italian : (int)LanguageID.Spanish;
         }
 
         return lang;
     }
-    private int DetectTradeLanguage(ReadOnlySpan<char> OT, int currentLanguageID)
+
+    private int DetectTradeLanguage(ReadOnlySpan<char> actual, int currentLanguageID)
     {
-        var names = TrainerNames;
+        var names = TrainerNames.Span;
         for (int lang = 1; lang < names.Length; lang++)
         {
             var expect = names[lang];
-            var match = OT.SequenceEqual(expect);
+            var match = actual.SequenceEqual(expect);
             if (match)
                 return lang;
         }

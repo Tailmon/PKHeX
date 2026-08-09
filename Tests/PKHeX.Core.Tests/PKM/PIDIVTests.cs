@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using FluentAssertions;
 using Xunit;
 
@@ -21,10 +20,11 @@ public class PIDIVTest
         var pk4 = new PK3 {PID = 0x31B05271, IVs = [02, 18, 03, 05, 30, 11]};
         MethodFinder.Analyze(pk4).Type.Should().Be(PIDType.Method_4);
 
-        var gk1 = new PK3();
-        PIDGenerator.SetValuesFromSeed(gk1, ga1.Type, ga1.OriginSeed);
-        gk1.PID.Should().Be(pk1.PID);
-        gk1.IVs.SequenceEqual(pk1.IVs).Should().BeTrue();
+        var seed = ga1.OriginSeed;
+        var pid = ClassicEraRNG.GetSequentialPID(ref seed);
+        var ivs = ClassicEraRNG.GetSequentialIVs(ref seed);
+        pk1.PID.Should().Be(pid);
+        pk1.IV32.Should().Be(ivs);
     }
 
     [Fact]
@@ -58,10 +58,19 @@ public class PIDIVTest
         var pv = MethodFinder.Analyze(pk3);
         pv.Type.Should().Be(PIDType.CXD);
 
-        var gk3 = new PK3();
-        PIDGenerator.SetValuesFromSeed(gk3, PIDType.CXD, pv.OriginSeed);
-        gk3.PID.Should().Be(pk3.PID);
-        gk3.IVs.SequenceEqual(pk3.IVs).Should().BeTrue();
+        var seed = pv.OriginSeed;
+
+        var iv1 = XDRNG.Next15(ref seed); // IV1
+        var iv2 = XDRNG.Next15(ref seed); // IV2
+        _ = XDRNG.Next16(ref seed); // Ability
+        var d16 = XDRNG.Next16(ref seed); // PID
+        var e16 = XDRNG.Next16(ref seed); // PID
+
+        var iv32 = (iv2 << 15) | iv1;
+        var pid = (d16 << 16) | e16;
+
+        pid.Should().Be(pk3.PID);
+        iv32.Should().Be(pk3.IV32);
     }
 
     [Fact]
@@ -73,9 +82,9 @@ public class PIDIVTest
         pv.Type.Should().Be(PIDType.Channel);
 
         var gkC = new PK3();
-        PIDGenerator.SetValuesFromSeed(gkC, PIDType.Channel, pv.OriginSeed);
+        EncounterGift3.SetValuesFromSeedChannel(gkC, pv.OriginSeed);
         gkC.PID.Should().Be(pkC.PID);
-        gkC.IVs.SequenceEqual(pkC.IVs).Should().BeTrue();
+        gkC.IV32.Should().Be(pkC.IV32);
     }
 
     [Fact]
@@ -83,35 +92,40 @@ public class PIDIVTest
     {
         // Restricted: TID16/SID16 are zero.
         var pkR = new PK3 {PID = 0x0000E97E, IVs = [17, 19, 20, 16, 13, 12]};
-        MethodFinder.Analyze(pkR).Type.Should().Be(PIDType.BACD_R);
+        var result = MethodFinder.Analyze(pkR);
+        (result is { Type: PIDType.BACD, OriginSeed: <= ushort.MaxValue }).Should().BeTrue();
 
         // Restricted Antishiny: PID is incremented 2 times to lose shininess.
         var pkRA = new PK3 {PID = 0x0000E980, IVs = [17, 19, 20, 16, 13, 12], TID16 = 01337, SID16 = 60486};
-        MethodFinder.Analyze(pkRA).Type.Should().Be(PIDType.BACD_R_A);
+        result = MethodFinder.Analyze(pkRA);
+        (result is { Type: PIDType.BACD_A, OriginSeed: <= ushort.MaxValue }).Should().BeTrue();
 
         // Unrestricted: TID16/SID16 are zero.
         var pkU = new PK3 {PID = 0x67DBFC33, IVs = [12, 25, 27, 30, 02, 31]};
-        MethodFinder.Analyze(pkU).Type.Should().Be(PIDType.BACD_U);
+        result = MethodFinder.Analyze(pkU);
+        (result is { Type: PIDType.BACD }).Should().BeTrue();
 
         // Unrestricted Antishiny: PID is incremented 5 times to lose shininess.
         var pkUA = new PK3 {PID = 0x67DBFC38, IVs = [12, 25, 27, 30, 02, 31], TID16 = 01337, SID16 = 40657};
-        MethodFinder.Analyze(pkUA).Type.Should().Be(PIDType.BACD_U_A);
+        result = MethodFinder.Analyze(pkUA);
+        (result is { Type: PIDType.BACD_A }).Should().BeTrue();
 
         // berry fix zigzagoon: seed 0x0020
+        const ushort bfix = 0x20;
         var pkRS = new PK3 {PID = 0x38CA4EA0, IVs = [00, 20, 28, 11, 19, 00], TID16 = 30317, SID16 = 00000};
-        var a_pkRS = MethodFinder.Analyze(pkRS);
-        a_pkRS.Type.Should().Be(PIDType.BACD_R_S);
-        a_pkRS.OriginSeed.Should().Be(0x0020);
+        result = MethodFinder.Analyze(pkRS);
+        (result is { Type: PIDType.BACD_S, OriginSeed: bfix }).Should().BeTrue();
 
-        var gkRS = new PK3 { TID16 = 30317, SID16 = 00000 };
-        PIDGenerator.SetValuesFromSeed(gkRS, PIDType.BACD_R_S, a_pkRS.OriginSeed);
-        gkRS.PID.Should().Be(pkRS.PID);
-        gkRS.IVs.SequenceEqual(pkRS.IVs).Should().BeTrue();
+        uint seed = bfix;
+        var pid = CommonEvent3.GetForceShiny(ref seed, 30317);
+        var iv32 = ClassicEraRNG.GetSequentialIVs(ref seed);
+        pid.Should().Be(pkRS.PID);
+        iv32.Should().Be(pkRS.IV32);
 
         // Unrestricted Antishiny nyx
-        var nyxUA = new PK3 {PID = 0xBD3DF676, IVs = [00, 15, 05, 04, 21, 05], TID16 = 80, SID16 = 0};
-        var nyx_pkUA = MethodFinder.Analyze(nyxUA);
-        nyx_pkUA.Type.Should().Be(PIDType.BACD_U_AX);
+        var nyxUA = new PK3 {PID = 0xBD3DF676, IVs = [00, 15, 05, 04, 21, 05], TID16 = 00080, SID16 = 00000};
+        result = MethodFinder.Analyze(nyxUA);
+        (result is { Type: PIDType.BACD_AX }).Should().BeTrue();
     }
 
     [Fact]
@@ -138,28 +152,30 @@ public class PIDIVTest
         MethodFinder.Analyze(pkS5).Type.Should().Be(PIDType.G5MGShiny);
     }
 
-    [Fact]
-    public void PIDIVPokeSpotTest()
-    {
-        // XD PokeSpots: Check all 3 Encounter Slots (examples are one for each location).
-        var pkPS0 = new PK3 { PID = 0x7B2D9DA7 }; // Zubat (Cave)
-        MethodFinder.GetPokeSpotSeedFirst(pkPS0, 0).Type.Should().Be(PIDType.PokeSpot); // PokeSpot encounter info mismatch (Common)
-
-        var pkPS1 = new PK3 { PID = 0x3EE9AF66 }; // Gligar (Rock)
-        MethodFinder.GetPokeSpotSeedFirst(pkPS1, 1).Type.Should().Be(PIDType.PokeSpot); // PokeSpot encounter info mismatch (Uncommon)
-
-        var pkPS2 = new PK3 { PID = 0x9B667F3C }; // Surskit (Oasis)
-        MethodFinder.GetPokeSpotSeedFirst(pkPS2, 2).Type.Should().Be(PIDType.PokeSpot); // PokeSpot encounter info mismatch (Rare)
-    }
+    [Theory]
+    [InlineData(0x7B2D9DA7, 0)] // Zubat (Cave) (Common)
+    [InlineData(0x3EE9AF66, 1)] // Gligar (Rock) (Uncommon)
+    [InlineData(0x9B667F3C, 2)] // Surskit (Oasis) (Rare)
+    public void PIDIVPokeSpotTest(uint pid, byte slot) => MethodPokeSpot.TryGetOriginSeedPID(pid, slot, out _).Should().BeTrue();
 
     [Theory]
-    [InlineData(30, 31, 31, 14, 31, 31, 0x28070031, 24, (int)Species.Pikachu, PokewalkerCourse4.YellowForest, PokewalkerSeedType.NoStroll)]
-    public void PokewalkerIVTest(uint hp, uint atk, uint def, uint spA, uint spD, uint spE, uint seed, ushort expect, ushort species, PokewalkerCourse4 course, PokewalkerSeedType type)
+    [InlineData(62714, 62938)]
+    [InlineData(05724, 31840)]
+    [InlineData(31827, 52374)]
+    [InlineData(01337, 01337)]
+    [InlineData(34952, 34952)]
+    [InlineData(01337, 00001, false)]
+    [InlineData(42069, 13370, false)]
+    public void CXDTrainerTest(ushort tid, ushort sid, bool expect = true) => MethodCXD.TryGetSeedTrainerID(tid, sid, out _).Should().Be(expect);
+
+    [Theory]
+    [InlineData(30, 31, 31, 14, 31, 31, 0x28070031, 024, PokewalkerSeedType.NoStroll)]
+    [InlineData(00, 00, 00, 05, 03, 09, 0x00011434, 539, PokewalkerSeedType.Stroll)]
+    public void PokewalkerIVTest(uint hp, uint atk, uint def, uint spA, uint spD, uint spE, uint seed, ushort expect, PokewalkerSeedType type)
     {
-        Span<uint> tmp = stackalloc uint[LCRNG.MaxCountSeedsIV];
-        var result = PokewalkerRNG.GetFirstSeed(species, course, tmp, hp, atk, def, spA, spD, spE);
+        var result = PokewalkerRNG.GetLeastEffortSeed(hp, atk, def, spA, spD, spE);
         result.Type.Should().Be(type);
-        result.PriorPoke.Should().Be(expect);
+        result.Count.Should().Be(expect);
         result.Seed.Should().Be(seed);
     }
 
@@ -168,16 +184,16 @@ public class PIDIVTest
     {
         PK4[] fakes =
         [
-            new PK4 { Species = 025, PID = 0x34000089, TID16 = 20790, SID16 = 39664, Gender = 0}, // Pikachu
-            new PK4 { Species = 025, PID = 0x7DFFFF60, TID16 = 30859, SID16 = 63760, Gender = 1}, // Pikachu
-            new PK4 { Species = 025, PID = 0x7DFFFF65, TID16 = 30859, SID16 = 63760, Gender = 1}, // Pikachu
-            new PK4 { Species = 025, PID = 0x7E000003, TID16 = 30859, SID16 = 63760, Gender = 1}, // Pikachu
+            new() { Species = 025, PID = 0x34000089, TID16 = 20790, SID16 = 39664, Gender = 0}, // Pikachu
+            new() { Species = 025, PID = 0x7DFFFF60, TID16 = 30859, SID16 = 63760, Gender = 1}, // Pikachu
+            new() { Species = 025, PID = 0x7DFFFF65, TID16 = 30859, SID16 = 63760, Gender = 1}, // Pikachu
+            new() { Species = 025, PID = 0x7E000003, TID16 = 30859, SID16 = 63760, Gender = 1}, // Pikachu
 
-            new PK4 { Species = 025, PID = 0x2100008F, TID16 = 31526, SID16 = 42406, Gender = 0}, // Pikachu
-            new PK4 { Species = 025, PID = 0x71FFFF5A, TID16 = 49017, SID16 = 12807, Gender = 1}, // Pikachu
-            new PK4 { Species = 025, PID = 0xC0000001, TID16 = 17398, SID16 = 31936, Gender = 1}, // Pikachu
-            new PK4 { Species = 025, PID = 0x2FFFFF5E, TID16 = 27008, SID16 = 42726, Gender = 1}, // Pikachu
-            new PK4 { Species = 025, PID = 0x59FFFFFE, TID16 = 51223, SID16 = 28044, Gender = 0}, // Pikachu
+            new() { Species = 025, PID = 0x2100008F, TID16 = 31526, SID16 = 42406, Gender = 0}, // Pikachu
+            new() { Species = 025, PID = 0x71FFFF5A, TID16 = 49017, SID16 = 12807, Gender = 1}, // Pikachu
+            new() { Species = 025, PID = 0xC0000001, TID16 = 17398, SID16 = 31936, Gender = 1}, // Pikachu
+            new() { Species = 025, PID = 0x2FFFFF5E, TID16 = 27008, SID16 = 42726, Gender = 1}, // Pikachu
+            new() { Species = 025, PID = 0x59FFFFFE, TID16 = 51223, SID16 = 28044, Gender = 0}, // Pikachu
         ];
         foreach (var pk in fakes)
             MethodFinder.Analyze(pk).Type.Should().Be(PIDType.Pokewalker);
@@ -194,7 +210,7 @@ public class PIDIVTest
         int count = LCRNGReversal.GetSeeds(seeds, first, second);
         count.Should().NotBe(0);
 
-        seeds[..count].IndexOf(seed).Should().NotBe(-1);
+        seeds[..count].Contains(seed).Should().BeTrue();
     }
 
     [Fact]
@@ -215,8 +231,8 @@ public class PIDIVTest
         // Seeds need to be unrolled twice to account for the 2 PID rolls before IVs.
 
         var reg = seeds[..count];
-        var index = reg.IndexOf(LCRNG.Next2(0x48FBAA42u));
-        index.Should().NotBe(-1);
+        var expect = LCRNG.Next2(0x48FBAA42u);
+        reg.Contains(expect).Should().BeTrue();
     }
 
     [Fact]
@@ -231,10 +247,92 @@ public class PIDIVTest
         Span<uint> seeds = stackalloc uint[XDRNG.MaxCountSeedsIV];
         var cp = XDRNG.GetSeeds(seeds, rand0 & 0xFFFF0000, rand1 & 0xFFFF0000);
         var p = seeds[..cp];
-        p.IndexOf(seed).Should().NotBe(-1);
+        p.Contains(seed).Should().BeTrue();
 
         var ci = XDRNG.GetSeedsIVs(seeds, rand0 & 0x7FFF0000, rand1 & 0x7FFF0000);
         var i = seeds[..ci];
-        i.IndexOf(seed).Should().NotBe(-1);
+        i.Contains(seed).Should().BeTrue();
+    }
+
+    [Fact]
+    public void LCRNGReversalLatticeRecovery()
+    {
+        const uint seed = 0x12345678;
+        var first = LCRNG.Next(seed);
+        var second = LCRNG.Next(first);
+        var third = LCRNG.Next(second);
+
+        Span<uint> seeds = stackalloc uint[LCRNG.MaxCountSeedsIV];
+        var count = LCRNGReversal.GetSeedsIVs(seeds, first & 0x7FFF0000, second & 0x7FFF0000);
+        seeds[..count].Contains(seed).Should().BeTrue();
+
+        count = LCRNGReversalSkip.GetSeedsIVs(seeds, first & 0x7FFF0000, third & 0x7FFF0000);
+        seeds[..count].Contains(seed).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(0x00000007, 0)]
+    [InlineData(0x00000065, 0)]
+    [InlineData(0x04206967, 2)]
+    [InlineData(0x0BADB015, 2)]
+    [InlineData(0x3FF07C1F, 4)] // 0 atk 0 spe
+    [InlineData(0x3FFFFFFF, 4)]
+    [InlineData(0x3FFFFC1F, 6)] // 0 atk
+    [InlineData(0x00042069, 6)]
+    public void MRNGReversalRanchRecovery(uint iv32, int recovered)
+    {
+        var hp = iv32 & 31;
+        var atk = (iv32 >> 5) & 31;
+        var def = (iv32 >> 10) & 31;
+        var spe = (iv32 >> 15) & 31;
+        var spa = (iv32 >> 20) & 31;
+        var spd = (iv32 >> 25) & 31;
+
+        Span<uint> seeds = stackalloc uint[LCRNG.MaxCountSeedsIV];
+        var count = MRNGReversal.GetSeedsIVs(seeds, hp, atk, def, spa, spd, spe);
+        count.Should().Be(recovered);
+
+        // Verify all forward candidates match the IVs.
+        foreach (var seed in seeds[..count])
+        {
+            var result = MRNG.GetSequentialIVs(seed);
+            result.Should().Be(iv32);
+        }
+    }
+
+    [Theory]
+    [InlineData(0x00000000, 1, false)]
+    [InlineData(0x00000001, 7)]
+    [InlineData(0x00000087, 9)]
+    [InlineData(0x00000888, 10)]
+    [InlineData(0x0000F525, 11)]
+    [InlineData(0x00019994, 12)]
+    public void ChannelLatticeRecovery(uint iv32, int recovered, bool isObtainable = true)
+    {
+        var hp = iv32 & 31;
+        var atk = (iv32 >> 5) & 31;
+        var def = (iv32 >> 10) & 31;
+        var spe = (iv32 >> 15) & 31;
+        var spa = (iv32 >> 20) & 31;
+        var spd = (iv32 >> 25) & 31;
+
+        Span<uint> seeds = stackalloc uint[XDRNG.MaxCountSeedsChannel];
+        var count = XDRNG.GetSeedsChannel(seeds, hp, atk, def, spa, spd, spe);
+        count.Should().Be(recovered);
+
+        // Verify all forward candidates match the IVs.
+        var possible = false; // also check if the IV spread is actually reachable from any of the recovered seeds via upstream rand() logic.
+        foreach (var origin in seeds[..count])
+        {
+            var seed = ChannelJirachi.SkipToIVs(origin);
+            var result = XDRNG.GetSequentialIV32(seed);
+            result.Should().Be(iv32);
+
+            // check if any of the PID/IV origin seeds can unroll to a menu seed for the player to hit
+            var check = ChannelJirachi.GetPossible(origin);
+            if (check.Pattern != ChannelJirachiRandomResult.None)
+                possible = true;
+        }
+        possible.Should().Be(isObtainable);
     }
 }

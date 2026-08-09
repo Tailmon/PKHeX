@@ -35,8 +35,8 @@ public sealed class PB8 : G8PKM
         AffixedRibbon = Core.AffixedRibbon.None;
     }
 
-    public PB8(byte[] data) : base(data) { }
-    public override PB8 Clone() => new((byte[])Data.Clone());
+    public PB8(Memory<byte> data) : base(data) { }
+    public override PB8 Clone() => new(Data.ToArray());
 
     public bool IsDprIllegal
     {
@@ -133,8 +133,6 @@ public sealed class PB8 : G8PKM
     public override int MaxItemID => Legal.MaxItemID_8b;
     public override int MaxBallID => Legal.MaxBallID_8b;
     public override GameVersion MaxGameID => Legal.MaxGameID_HOME;
-
-    public override bool WasEgg => IsEgg || EggDay != 0;
 
     public override bool HasOriginalMetLocation => base.HasOriginalMetLocation && !(LA && MetLocation == LocationsHOME.SWLA);
 

@@ -47,7 +47,7 @@ public partial class SAV_PokedexSWSH : Form
         // Fill List
         CB_Species.InitializeBinding();
         var species = GameInfo.FilteredSources.Species.Where(z => Dex.DexLookup.ContainsKey((ushort)z.Value)).ToArray();
-        CB_Species.DataSource = new BindingSource(species, null);
+        CB_Species.DataSource = new BindingSource(species, string.Empty);
 
         var names = Indexes.Select(z => z.GetEntryName(speciesNames) + (Dex.DexLookup[z.Species].DexType == z.Entry.DexType ? string.Empty : "***"));
         foreach (var n in names)
@@ -55,7 +55,6 @@ public partial class SAV_PokedexSWSH : Form
 
         Loading = false;
         LB_Species.SelectedIndex = 0;
-        CB_Species.KeyDown += WinFormsUtil.RemoveDropCB;
         CanSave = true;
     }
 
@@ -200,7 +199,7 @@ public partial class SAV_PokedexSWSH : Form
         bool shiny = ModifierKeys == Keys.Shift;
         var species = Indexes[lastIndex].Species;
         Dex.SetDexEntryAll(species, shiny);
-        System.Media.SystemSounds.Asterisk.Play();
+        WinFormsUtil.Asterisk();
         GetEntry(lastIndex);
     }
 
@@ -214,7 +213,7 @@ public partial class SAV_PokedexSWSH : Form
     {
         SetEntry(lastIndex);
         Dex.SeenNone();
-        System.Media.SystemSounds.Asterisk.Play();
+        WinFormsUtil.Asterisk();
         GetEntry(lastIndex);
     }
 
@@ -223,7 +222,7 @@ public partial class SAV_PokedexSWSH : Form
         SetEntry(lastIndex);
         bool shiny = ModifierKeys == Keys.Shift;
         Dex.SeenAll(shiny);
-        System.Media.SystemSounds.Asterisk.Play();
+        WinFormsUtil.Asterisk();
         GetEntry(lastIndex);
     }
 
@@ -231,7 +230,7 @@ public partial class SAV_PokedexSWSH : Form
     {
         SetEntry(lastIndex);
         Dex.CaughtNone();
-        System.Media.SystemSounds.Asterisk.Play();
+        WinFormsUtil.Asterisk();
         GetEntry(lastIndex);
     }
 
@@ -240,7 +239,7 @@ public partial class SAV_PokedexSWSH : Form
         SetEntry(lastIndex);
         bool shiny = ModifierKeys == Keys.Shift;
         Dex.CaughtAll(shiny);
-        System.Media.SystemSounds.Asterisk.Play();
+        WinFormsUtil.Asterisk();
         GetEntry(lastIndex);
     }
 
@@ -249,7 +248,7 @@ public partial class SAV_PokedexSWSH : Form
         SetEntry(lastIndex);
         bool shiny = ModifierKeys == Keys.Shift;
         Dex.CompleteDex(shiny);
-        System.Media.SystemSounds.Asterisk.Play();
+        WinFormsUtil.Asterisk();
         GetEntry(lastIndex);
     }
 
@@ -257,7 +256,7 @@ public partial class SAV_PokedexSWSH : Form
     {
         SetEntry(lastIndex);
         Dex.SetAllBattledCount((uint)NUD_Battled.Value);
-        System.Media.SystemSounds.Asterisk.Play();
+        WinFormsUtil.Asterisk();
         GetEntry(lastIndex);
     }
 }

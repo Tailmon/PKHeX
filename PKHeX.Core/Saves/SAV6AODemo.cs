@@ -9,7 +9,7 @@ namespace PKHeX.Core;
 /// <inheritdoc cref="SAV6" />
 public sealed class SAV6AODemo : SAV6, ISaveBlock6Core
 {
-    public SAV6AODemo(byte[] data) : base(data, SaveBlockAccessor6AODemo.BlockMetadataOffset)
+    public SAV6AODemo(Memory<byte> data) : base(data, SaveBlockAccessor6AODemo.BlockMetadataOffset)
     {
         Blocks = new SaveBlockAccessor6AODemo(this);
         Initialize();
@@ -23,7 +23,7 @@ public sealed class SAV6AODemo : SAV6, ISaveBlock6Core
 
     public override PersonalTable6AO Personal => PersonalTable.AO;
     public override ReadOnlySpan<ushort> HeldItems => Legal.HeldItems_AO;
-    protected override SAV6AODemo CloneInternal() => new((byte[])Data.Clone());
+    protected override SAV6AODemo CloneInternal() => new(Data.ToArray());
     public override ushort MaxMoveID => Legal.MaxMoveID_6_AO;
     public override int MaxItemID => Legal.MaxItemID_6_AO;
     public override int MaxAbilityID => Legal.MaxAbilityID_6_AO;
@@ -45,6 +45,7 @@ public sealed class SAV6AODemo : SAV6, ISaveBlock6Core
     public override GameTime6 GameTime => Blocks.GameTime;
     public override Situation6 Situation => Blocks.Situation;
     public override PlayTime6 Played => Blocks.Played;
+    public override FieldMoveModelSave6 Overworld => Blocks.Overworld;
     public override MyStatus6 Status => Blocks.Status;
     public override RecordBlock6 Records => Blocks.Records;
     public override EventWork6 EventWork => Blocks.EventWork;
@@ -52,4 +53,6 @@ public sealed class SAV6AODemo : SAV6, ISaveBlock6Core
 
     MyItem ISaveBlock6Core.Items => Items;
     RecordBlock6 ISaveBlock6Core.Records => Records;
+
+    public override PlayerBag6AO Inventory => new(this);
 }

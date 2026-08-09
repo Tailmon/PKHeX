@@ -28,7 +28,7 @@ public partial class SAV_SecretBase : Form
 
         NUD_FObject.Maximum = SecretBase6.COUNT_GOODS - 1; // zero indexed!
         NUD_FPKM.Maximum = SecretBase6Other.COUNT_TEAM - 1; // zero indexed!
-        PG_Base.Font = FontUtil.GetPKXFont();
+        PG_Base.Font = FontUtil.GetFont(context: EntityContext.Gen6);
 
         SetupComboBoxes();
         ReloadSecretBaseList();
@@ -48,10 +48,10 @@ public partial class SAV_SecretBase : Form
         CB_Form.InitializeBinding();
 
         var filtered = GameInfo.FilteredSources;
-        CB_Ball.DataSource = new BindingSource(filtered.Balls, null);
-        CB_HeldItem.DataSource = new BindingSource(filtered.Items, null);
-        CB_Species.DataSource = new BindingSource(filtered.Species, null);
-        CB_Nature.DataSource = new BindingSource(filtered.Natures, null);
+        CB_Ball.DataSource = new BindingSource(filtered.Balls, string.Empty);
+        CB_HeldItem.DataSource = new BindingSource(filtered.Items, string.Empty);
+        CB_Species.DataSource = new BindingSource(filtered.Species, string.Empty);
+        CB_Nature.DataSource = new BindingSource(filtered.Natures, string.Empty);
 
         CB_Move1.InitializeBinding();
         CB_Move2.InitializeBinding();
@@ -59,10 +59,10 @@ public partial class SAV_SecretBase : Form
         CB_Move4.InitializeBinding();
 
         var moves = filtered.Moves;
-        CB_Move1.DataSource = new BindingSource(moves, null);
-        CB_Move2.DataSource = new BindingSource(moves, null);
-        CB_Move3.DataSource = new BindingSource(moves, null);
-        CB_Move4.DataSource = new BindingSource(moves, null);
+        CB_Move1.DataSource = new BindingSource(moves, string.Empty);
+        CB_Move2.DataSource = new BindingSource(moves, string.Empty);
+        CB_Move3.DataSource = new BindingSource(moves, string.Empty);
+        CB_Move4.DataSource = new BindingSource(moves, string.Empty);
     }
 
     private void ReloadSecretBaseList()
@@ -270,7 +270,7 @@ public partial class SAV_SecretBase : Form
             return;
 
         var bdata = CurrentBase;
-        if (bdata != null)
+        if (bdata is not null)
             SaveCurrent(bdata);
 
         ResetLoadNew();
@@ -321,7 +321,7 @@ public partial class SAV_SecretBase : Form
     {
         var abilities = PersonalTable.AO.GetFormEntry(species, form);
         var list = GameInfo.FilteredSources.GetAbilityList(abilities);
-        CB_Ability.DataSource = new BindingSource(list, null);
+        CB_Ability.DataSource = new BindingSource(list, string.Empty);
         CB_Ability.SelectedIndex = abilityIndex < 3 ? abilityIndex : 0;
     }
 
@@ -332,7 +332,7 @@ public partial class SAV_SecretBase : Form
         CB_Form.Enabled = CB_Form.Visible = hasForms;
 
         var list = FormConverter.GetFormList(species, GameInfo.Strings.types, GameInfo.Strings.forms, Main.GenderSymbols, SAV.Context);
-        CB_Form.DataSource = new BindingSource(list, null);
+        CB_Form.DataSource = new BindingSource(list, string.Empty);
     }
 
     private void UpdateSpecies(object sender, EventArgs e)
@@ -386,6 +386,7 @@ public partial class SAV_SecretBase : Form
     private void B_Import_Click(object sender, EventArgs e)
     {
         using var ofd = new OpenFileDialog();
+        ofd.Title = MsgFileLoadSelectFileSecretBase;
         if (ofd.ShowDialog() != DialogResult.OK)
             return;
 
@@ -405,7 +406,7 @@ public partial class SAV_SecretBase : Form
         sb.Load(obj);
         ReloadSecretBaseList();
         LoadCurrent(sb);
-        System.Media.SystemSounds.Asterisk.Play();
+        WinFormsUtil.Asterisk();
     }
 
     private void B_Export_Click(object sender, EventArgs e)
@@ -419,13 +420,12 @@ public partial class SAV_SecretBase : Form
             tr = "Trainer";
         using var sfd = new SaveFileDialog();
         sfd.Filter = "Secret Base Data|*.sb6";
-        sfd.FileName = $"{sb.BaseLocation:D2} - {Util.CleanFileName(tr)}.sb6";
+        sfd.FileName = $"{sb.BaseLocation:D2} - {PathUtil.CleanFileName(tr)}.sb6";
         if (sfd.ShowDialog() != DialogResult.OK)
             return;
 
         var path = sfd.FileName;
-        var data = sb.Write();
-        File.WriteAllBytes(path, data);
+        File.WriteAllBytes(path, sb.Data);
     }
     #endregion
 
@@ -467,7 +467,7 @@ public partial class SAV_SecretBase : Form
         SAV.Records.SetRecord(080, (int)flags);
 
         var bdata = CurrentBase;
-        if (bdata != null)
+        if (bdata is not null)
             SaveCurrent(bdata);
 
         Origin.CopyChangesFrom(SAV);

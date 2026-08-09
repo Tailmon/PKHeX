@@ -16,9 +16,10 @@ public static class StringConverter1
     public const char Terminator = '\0';
     public const char TradeOT = '*';
 
-    public static bool GetIsJapanese(ReadOnlySpan<char> str) => AllJapanese(str);
-
-    private static bool AllJapanese(ReadOnlySpan<char> str)
+    /// <summary>
+    /// Quick check if the input string is entirely Japanese characters.
+    /// </summary>
+    public static bool GetIsJapanese(ReadOnlySpan<char> str)
     {
         foreach (var x in str)
         {
@@ -29,7 +30,7 @@ public static class StringConverter1
         static bool IsJapanese(char c) => c is >= '\u3000' and <= '\u30FC';
     }
 
-    public static bool GetIsEnglish(ReadOnlySpan<char> str) => !GetIsJapanese(str);
+    public static bool GetIsEnglish(ReadOnlySpan<char> str) => !GetIsJapanese(str) && !str.StartsWith(TradeOT);
     public static bool GetIsJapanese(ReadOnlySpan<byte> raw) => AllCharsInTable(raw, TableJP);
     public static bool GetIsEnglish(ReadOnlySpan<byte> raw) => AllCharsInTable(raw, TableEN);
 
@@ -92,6 +93,9 @@ public static class StringConverter1
     /// <returns>Decoded string.</returns>
     public static string GetString(ReadOnlySpan<byte> data, bool jp)
     {
+        if (!jp && StringConverter2KOR.IsHangul(data))
+            return StringConverter2KOR.GetString(data);
+
         Span<char> result = stackalloc char[data.Length];
         int length = LoadString(data, result, jp);
         return new string(result[..length]);
@@ -104,6 +108,9 @@ public static class StringConverter1
     /// <returns>Character count loaded.</returns>
     public static int LoadString(ReadOnlySpan<byte> data, Span<char> result, bool jp)
     {
+        if (!jp && StringConverter2KOR.IsHangul(data))
+            return StringConverter2KOR.LoadString(data, result);
+
         if (data.Length == 0)
             return 0;
         if (data[0] == TradeOTCode) // In-game Trade
@@ -137,6 +144,9 @@ public static class StringConverter1
     public static int SetString(Span<byte> destBuffer, ReadOnlySpan<char> value, int maxLength, bool jp,
         StringConverterOption option = StringConverterOption.Clear50)
     {
+        if (!jp && StringConverter2KOR.IsHangul(value))
+            return StringConverter2KOR.SetString(destBuffer, value, maxLength, option);
+
         if (option is StringConverterOption.ClearZero)
             destBuffer.Clear();
         else if (option is StringConverterOption.Clear50)
@@ -177,9 +187,9 @@ public static class StringConverter1
         var index = dict.IndexOf(c);
         if (index == -1)
             return TryGetUserFriendlyRemap(dict, c, out result);
-        // \0 shouldn't really be user-entered, but just in case
+        // \0 at index 0 shouldn't really be user-entered, check just in case
         result = (byte)index;
-        return index != default;
+        return index != 0;
     }
 
     // べ (U+3079), ぺ (U+307A), へ (U+3078), and り (U+308A)
@@ -196,12 +206,13 @@ public static class StringConverter1
             result = (byte)index;
             return true; // Valid Hiragana will always be found if it's in the table
         }
-        result = default;
+        result = 0;
         return false;
     }
 
     #region Gen 1 Character Tables
 
+    // Share all to Gen2's tables.
     internal const char NUL = Terminator;
     internal const char TOT = TradeOT;
     internal const char LPK = '{'; // Pk
@@ -209,10 +220,10 @@ public static class StringConverter1
     internal const char MNY = '¥'; // Yen
     internal const char LPO = '@'; // Po
     internal const char LKE = '#'; // Ke
-    internal const char LEA = '%'; // é for Box
-    public const char DOT = '․'; // . for MR.MIME (U+2024, not U+002E)
+    internal const char LEA = '%'; // é for Box/Mail
+    internal const char DOT = '․'; // . for MR.MIME (U+2024, not U+002E)
     internal const char SPF = '　'; // Full-width space (U+3000)
-    public const char SPH = ' '; // Half-width space
+    internal const char SPH = ' '; // Half-width space
 
     public static ReadOnlySpan<char> TableEN =>
     [
@@ -229,7 +240,7 @@ public static class StringConverter1
         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', // A0-AF
         'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'à', 'è', 'é', 'ù', 'À', 'Á', // B0-BF
         'Ä', 'Ö', 'Ü', 'ä', 'ö', 'ü', 'È', 'É', 'Ì', 'Í', 'Ñ', 'Ò', 'Ó', 'Ù', 'Ú', 'á', // C0-CF
-        'ì', 'í', 'ñ', 'ò', 'ó', 'ú', NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, '←', '\'', // D0-DF
+        'ì', 'í', 'ñ', 'ò', 'ó', 'ú', 'º', NUL, NUL, NUL, NUL, NUL, NUL, NUL, '←', '\'', // D0-DF
         '’', LPK, LMN, '-', NUL, NUL, '?', '!', DOT, '&', LEA, '→', '▷', '▶', '▼', '♂', // E0-EF
         MNY, '×', '.', '/', ',', '♀', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', // F0-FF
     ];
@@ -242,8 +253,8 @@ public static class StringConverter1
         'だ', 'ぢ', 'づ', 'で', 'ど', NUL, NUL, NUL, NUL,  NUL, 'ば', 'び', 'ぶ', 'ベ', 'ぼ', NUL, // 30-3F
         'パ', 'ピ', 'プ', 'ポ', 'ぱ', 'ぴ', 'ぷ', 'ペ', 'ぽ', NUL, NUL, NUL, NUL, NUL, NUL, NUL, // 40-4F
         NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, TOT, NUL, NUL, // 50-5F
-        NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, // 60-6F
-        '「', '」', '『', '』', '・', '⋯', NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, SPF, // 70-7F
+        NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, 'ぃ', 'ぅ', // 60-6F
+        '「', '」', '『', '』', '・', '⋯', 'ぁ', 'ぇ', 'ぉ', NUL, NUL, NUL, NUL, NUL, NUL, SPF, // 70-7F
         'ア', 'イ', 'ウ', 'エ', 'オ', 'カ', 'キ', 'ク', 'ケ', 'コ', 'サ', 'シ', 'ス', 'セ', 'ソ', 'タ', // 80-8F
         'チ', 'ツ', 'テ', 'ト', 'ナ', 'ニ', 'ヌ', 'ネ', 'ノ', 'ハ', 'ヒ', 'フ', 'ホ', 'マ', 'ミ', 'ム', // 90-9F
         'メ', 'モ', 'ヤ', 'ユ', 'ヨ', 'ラ', 'ル', 'レ', 'ロ', 'ワ', 'ヲ', 'ン', 'ッ', 'ャ', 'ュ', 'ョ', // A0-AF
@@ -251,7 +262,7 @@ public static class StringConverter1
         'た', 'ち', 'つ', 'て', 'と', 'な', 'に', 'ぬ', 'ね', 'の', 'は', 'ひ', 'ふ', 'ヘ', 'ほ', 'ま', // C0-CF
         'み', 'む', 'め', 'も', 'や', 'ゆ', 'よ', 'ら', 'リ', 'る', 'れ', 'ろ', 'わ', 'を', 'ん', 'っ', // D0-DF
         'ゃ', 'ゅ', 'ょ', 'ー', 'ﾟ', 'ﾞ', '？', '！', '。', 'ァ', 'ゥ', 'ェ', NUL, NUL, NUL, '♂', // E0-EF
-        MNY, NUL, '．', '／', 'ォ', '♀', '０', '１', '２', '３', '４', '５', '６', '７', '８', '９', // F0-FF
+        MNY, '×', '．', '／', 'ォ', '♀', '０', '１', '２', '３', '４', '５', '６', '７', '８', '９', // F0-FF
     ];
 
     #endregion

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace PKHeX.Core;
@@ -11,6 +12,7 @@ public sealed class SaveBlockMetadata<T>
 {
     private readonly Dictionary<string, IDataIndirect> BlockList;
 
+    [RequiresUnreferencedCode("Uses reflection to enumerate save block accessor properties for PropertyGrid-style inspection.")]
     public SaveBlockMetadata(ISaveBlockAccessor<T> accessor)
     {
         var aType = accessor.GetType();
@@ -19,7 +21,7 @@ public sealed class SaveBlockMetadata<T>
 
     public IEnumerable<string> GetSortedBlockList()
     {
-        return BlockList.Select(z => z.Key).OrderBy(z => z);
+        return BlockList.Select(z => z.Key).Order();
     }
 
     public IDataIndirect GetBlock(string name) => BlockList.First(z => z.Key == name).Value;

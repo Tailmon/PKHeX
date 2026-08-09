@@ -30,7 +30,7 @@ public partial class SAV_Misc4 : Form
         accessories = GameInfo.Strings.accessories;
         backdrops = GameInfo.Strings.backdrops;
         poketchapps = GameInfo.Strings.poketchapps;
-        backdropsSorted = [.. backdrops.OrderBy(z => z)]; // sorted copy
+        backdropsSorted = [.. backdrops.Order()]; // sorted copy
 
         StatNUDA = [NUD_Stat0, NUD_Stat1, NUD_Stat2, NUD_Stat3];
         StatLabelA = [L_Stat0, L_Stat1, L_Stat2, L_Stat3]; // Current, Trade, Record, Trade
@@ -140,7 +140,7 @@ public partial class SAV_Misc4 : Form
         if (SAV is SAV4Sinnoh sinnoh)
         {
             ReadPoketch(sinnoh);
-            NUD_UGFlags.Value = Math.Clamp(sinnoh.UG_Flags, 0, 999_999);
+            NUD_UGFlags.Value = Math.Clamp(sinnoh.UG_FlagsCaptured, 0, SAV4Sinnoh.UG_MAX);
             L_PokeathlonPoints.Visible = NUD_PokeathlonPoints.Visible = false;
         }
         else if (SAV is SAV4HGSS hgss)
@@ -178,7 +178,7 @@ public partial class SAV_Misc4 : Form
         if (SAV is SAV4Sinnoh sinnoh)
         {
             SavePoketch(sinnoh);
-            sinnoh.UG_Flags = (uint)NUD_UGFlags.Value;
+            sinnoh.UG_FlagsCaptured = (uint)NUD_UGFlags.Value;
         }
         else if (SAV is SAV4HGSS hgss)
         {
@@ -247,7 +247,9 @@ public partial class SAV_Misc4 : Form
     {
         if (inp.Length != DotMatrixPixelCount / 4)
             return;
-        PB_DotArtist.Image = GetDotArt(inp);
+        var img = GetDotArt(inp);
+        PB_DotArtist.Image = img;
+        PB_DotArtist.Size = new(img.Width + 2, img.Height + 2); // 1px border
     }
 
     private void SetFlagsFromFileName(string fileName)
@@ -262,7 +264,7 @@ public partial class SAV_Misc4 : Form
         inpY = Math.Clamp(inpY, 0, (DotMatrixHeight * DotMatrixUpscaleFactor) - 1);
         int i = (inpX >> 2) + (DotMatrixWidth * (inpY >> 2));
         Span<byte> ndab = stackalloc byte[DotMatrixPixelCount / 4];
-        DotArtistByte.AsSpan().CopyTo(ndab);
+        DotArtistByte.CopyTo(ndab);
 
         byte c = (byte)((ndab[i >> 2] >> ((i % 4) << 1)) & 3);
         if (++c >= 4)
@@ -279,7 +281,7 @@ public partial class SAV_Misc4 : Form
         // foreach (CheckBox c in Apps) c.Checked = true;
         for (int i = 0; i < CLB_Poketch.Items.Count; i++)
             CLB_Poketch.SetItemChecked(i, true);
-        System.Media.SystemSounds.Asterisk.Play();
+        WinFormsUtil.Asterisk();
     }
 
     private void TAB_Poketch_DragEnter(object? sender, DragEventArgs? e)
@@ -360,7 +362,7 @@ public partial class SAV_Misc4 : Form
         CB_Species.InitializeBinding();
 
         var speciesList = GameInfo.FilteredSources.Species.Skip(1).ToList();
-        CB_Species.DataSource = new BindingSource(speciesList, null);
+        CB_Species.DataSource = new BindingSource(speciesList, string.Empty);
 
         editing = false;
         CB_Stats1.SelectedIndex = 0;
@@ -405,7 +407,7 @@ public partial class SAV_Misc4 : Form
     {
         if (sender is not Button b)
             return;
-        int index = Array.IndexOf(PrintButtonA, b);
+        int index = PrintButtonA.IndexOf(b);
         if (index < 0)
             return;
         index += PrintIndexStart;
@@ -435,7 +437,7 @@ public partial class SAV_Misc4 : Form
             rb.Visible = rb.Enabled = facility == 1;
 
         for (int i = 0; i < StatLabelA.Length; i++)
-            StatLabelA[i].Visible = StatLabelA[i].Enabled = StatNUDA[i].Visible = StatNUDA[i].Enabled = Array.IndexOf(BFV[BFF[facility][0]], i) >= 0;
+            StatLabelA[i].Visible = StatLabelA[i].Enabled = StatNUDA[i].Visible = StatNUDA[i].Enabled = BFV[BFF[facility][0]].Contains(i);
         if (facility == 0)
         {
             StatLabelA[1].Visible = StatLabelA[1].Enabled = StatNUDA[1].Visible = StatNUDA[1].Enabled = true;
@@ -523,7 +525,7 @@ public partial class SAV_Misc4 : Form
                 WriteUInt16LittleEndian(general[offset..], val);
             }
 
-            SetValToSav = Array.IndexOf(BFV[BFF[Facility][0]], SetValToSav);
+            SetValToSav = BFV[BFF[Facility][0]].IndexOf(SetValToSav);
             if (SetValToSav < 0)
                 return;
             var clamp = Math.Min((ushort)9999, val);
@@ -550,7 +552,7 @@ public partial class SAV_Misc4 : Form
         if (editing)
             return;
 
-        int n = Array.IndexOf(StatNUDA, sender);
+        int n = StatNUDA.IndexOf(sender);
         if (n < 0)
             return;
 
@@ -614,7 +616,7 @@ public partial class SAV_Misc4 : Form
         if (editing)
             return;
         NumericUpDown[] na = [NUD_CastleRankRcv, NUD_CastleRankItem, NUD_CastleRankInfo];
-        int i = Array.IndexOf(na, sender);
+        int i = na.IndexOf(sender);
         if (i < 0)
             return;
         var offset = BFF[3][2] + (BFF[3][3] * CB_Stats2.SelectedIndex) + 0x0A + (i << 1);
@@ -628,7 +630,7 @@ public partial class SAV_Misc4 : Form
         bool c = curspe == species;
         CHK_HallCurrent.Checked = c;
         CHK_HallCurrent.Text = curspe > 0 && curspe <= SAV.MaxSpeciesID
-            ? $"Current: {SpeciesName.GetSpeciesName(curspe, GameLanguage.GetLanguageIndex(Main.CurrentLanguage))}"
+            ? $"Current: {SpeciesName.GetSpeciesNameGeneration(curspe, GameLanguage.GetLanguageIndex(Main.CurrentLanguage), 4)}"
             : "Current: (None)";
 
         int s = 0;
@@ -664,7 +666,7 @@ public partial class SAV_Misc4 : Form
     {
         if (editing)
             return;
-        int i = Array.IndexOf(HallNUDA, sender);
+        int i = HallNUDA.IndexOf(sender);
         if (i < 0)
             return;
         int ofs = BFF[2][2] + (BFF[2][3] * CB_Stats2.SelectedIndex) + 6 + ((i >> 1) << 1);
@@ -725,12 +727,12 @@ public partial class SAV_Misc4 : Form
 
     private void ReadPokeathlon(SAV4HGSS s)
     {
-        NUD_PokeathlonPoints.Value = s.PokeathlonPoints;
+        NUD_PokeathlonPoints.Value = s.Pokeathlon.Points;
     }
 
     private void SavePokeathlon(SAV4HGSS s)
     {
-        s.PokeathlonPoints = (uint)NUD_PokeathlonPoints.Value;
+        s.Pokeathlon.Points = (uint)NUD_PokeathlonPoints.Value;
     }
 
     #region Seals
@@ -798,7 +800,7 @@ public partial class SAV_Misc4 : Form
     {
         bool setUnreleasedIndexes = sender == B_AllSealsIllegal;
         SetAllSeals(setUnreleasedIndexes);
-        System.Media.SystemSounds.Asterisk.Play();
+        WinFormsUtil.Asterisk();
     }
     #endregion
 
@@ -870,7 +872,7 @@ public partial class SAV_Misc4 : Form
     {
         bool setUnreleasedIndexes = sender == B_AllAccessoriesIllegal;
         SetAllAccessories(setUnreleasedIndexes);
-        System.Media.SystemSounds.Asterisk.Play();
+        WinFormsUtil.Asterisk();
     }
     #endregion
 
@@ -887,7 +889,7 @@ public partial class SAV_Misc4 : Form
             DisplayIndex = 0,
             Width = 190,
             FlatStyle = FlatStyle.Flat,
-            DataSource = new BindingSource(backdropsSorted, null),
+            DataSource = new BindingSource(backdropsSorted, string.Empty),
         };
         DGV_Backdrops.Columns.Add(dgv);
 
@@ -929,7 +931,7 @@ public partial class SAV_Misc4 : Form
         byte ctr = 0;
         for (int i = 0; i < BackdropInfo.Count; i++)
         {
-            Backdrop4 bd = (Backdrop4)Array.IndexOf(backdrops, DGV_Backdrops.Rows[i].Cells[0].Value);
+            var bd = (Backdrop4)backdrops.IndexOf(DGV_Backdrops.Rows[i].Cells[0].Value);
             if (bd.IsUnset()) // skip empty slots
                 continue;
 
@@ -944,7 +946,7 @@ public partial class SAV_Misc4 : Form
     {
         bool setUnreleasedIndexes = sender == B_AllBackdropsIllegal;
         SetAllBackdrops(setUnreleasedIndexes);
-        System.Media.SystemSounds.Asterisk.Play();
+        WinFormsUtil.Asterisk();
     }
     #endregion
 

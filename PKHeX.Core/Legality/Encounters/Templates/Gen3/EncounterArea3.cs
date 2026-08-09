@@ -6,7 +6,7 @@ using static PKHeX.Core.SlotType3;
 namespace PKHeX.Core;
 
 /// <summary>
-/// <see cref="GameVersion.Gen3"/> encounter area
+/// <see cref="EntityContext.Gen3"/> encounter area
 /// </summary>
 public sealed record EncounterArea3 : IEncounterArea<EncounterSlot3>, IAreaLocation
 {
@@ -19,40 +19,40 @@ public sealed record EncounterArea3 : IEncounterArea<EncounterSlot3>, IAreaLocat
 
     public bool IsMatchLocation(ushort location) => location == Location;
 
-    public static EncounterArea3[] GetAreas(BinLinkerAccessor input, [ConstantExpected] GameVersion game)
+    public static EncounterArea3[] GetAreas(BinLinkerAccessor input, [ConstantExpected] GameVersion version)
     {
         var result = new EncounterArea3[input.Length];
         for (int i = 0; i < result.Length; i++)
-            result[i] = new EncounterArea3(input[i], game);
+            result[i] = new EncounterArea3(input[i], version);
         return result;
     }
 
-    public static EncounterArea3[] GetAreasSwarm(BinLinkerAccessor input, [ConstantExpected] GameVersion game)
+    public static EncounterArea3[] GetAreasSwarm(BinLinkerAccessor input, [ConstantExpected] GameVersion version)
     {
         var result = new EncounterArea3[input.Length];
         for (int i = 0; i < result.Length; i++)
-            result[i] = new EncounterArea3(input[i], game, SwarmGrass50);
+            result[i] = new EncounterArea3(input[i], version, SwarmGrass50);
         return result;
     }
 
-    private EncounterArea3(ReadOnlySpan<byte> data, [ConstantExpected] GameVersion game)
+    private EncounterArea3(ReadOnlySpan<byte> data, [ConstantExpected] GameVersion version)
     {
         Location = data[0];
         // data[1] is unused because location is always <= 255.
         Type = (SlotType3)data[2];
         Rate = data[3];
-        Version = game;
+        Version = version;
 
         Slots = ReadRegularSlots(data[4..]);
     }
 
-    private EncounterArea3(ReadOnlySpan<byte> data, [ConstantExpected] GameVersion game, [ConstantExpected] SlotType3 type)
+    private EncounterArea3(ReadOnlySpan<byte> data, [ConstantExpected] GameVersion version, [ConstantExpected] SlotType3 type)
     {
         Location = data[0];
         // data[1] is unused because location is always <= 255.
         Type = type; // data[2] but it's always the same value
         Rate = data[3];
-        Version = game;
+        Version = version;
 
         Slots = ReadSwarmSlots(data[4..]);
     }
@@ -134,15 +134,26 @@ public sealed record EncounterArea3 : IEncounterArea<EncounterSlot3>, IAreaLocat
     }
 }
 
+/// <summary>
+/// Wild Encounter data <see cref="IEncounterTemplate"/> Type
+/// </summary>
 public enum SlotType3 : byte
 {
+    /// <summary> Grass tiles </summary>
     Grass = 0,
+    /// <summary> Water tiles </summary>
     Surf = 1,
+    /// <summary> Fishing with Old Rod </summary>
     Old_Rod = 2,
+    /// <summary> Fishing with Good Rod </summary>
     Good_Rod = 3,
+    /// <summary> Fishing with Super Rod </summary>
     Super_Rod = 4,
+    /// <summary> Using Rock Smash move </summary>
     Rock_Smash = 5,
 
+    /// <summary> Swarm in grass tiles </summary>
     SwarmGrass50 = 6,
+    /// <summary> Swarm in water tiles </summary>
     SwarmFish50 = 7,
 }

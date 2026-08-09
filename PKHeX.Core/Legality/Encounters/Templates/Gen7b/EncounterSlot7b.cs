@@ -3,7 +3,7 @@ namespace PKHeX.Core;
 /// <summary>
 /// Encounter Slot found in <see cref="GameVersion.GG"/>.
 /// </summary>
-public sealed record EncounterSlot7b(EncounterArea7b Parent, ushort Species, byte LevelMin, byte LevelMax)
+public sealed record EncounterSlot7b(EncounterArea7b Parent, ushort Species, byte LevelMin, byte LevelMax, byte CrossoverFlags)
     : IEncounterable, IEncounterMatch, IEncounterConvertible<PB7>
 {
     public byte Generation => 7;
@@ -13,7 +13,7 @@ public sealed record EncounterSlot7b(EncounterArea7b Parent, ushort Species, byt
     public Shiny Shiny => Shiny.Random;
     public AbilityPermission Ability => AbilityPermission.Any12;
     public bool IsShiny => false;
-    public ushort EggLocation => 0;
+    ushort ILocation.EggLocation => 0;
 
     public byte Form => 0;
 
@@ -28,8 +28,9 @@ public sealed record EncounterSlot7b(EncounterArea7b Parent, ushort Species, byt
     public PB7 ConvertToPKM(ITrainerInfo tr) => ConvertToPKM(tr, EncounterCriteria.Unrestricted);
     public PB7 ConvertToPKM(ITrainerInfo tr, EncounterCriteria criteria)
     {
-        int lang = (int)Language.GetSafeLanguage(Generation, (LanguageID)tr.Language);
+        int language = (int)Language.GetSafeLanguage789((LanguageID)tr.Language);
         var pi = PersonalTable.GG[Species];
+        var date = EncounterDate.GetDateSwitch();
         var pk = new PB7
         {
             Species = Species,
@@ -38,14 +39,17 @@ public sealed record EncounterSlot7b(EncounterArea7b Parent, ushort Species, byt
             MetLocation = Location,
             MetLevel = LevelMin,
             Version = Version,
-            MetDate = EncounterDate.GetDateSwitch(),
+            MetDate = date,
             Ball = (byte)Ball.Poke,
 
-            Language = lang,
+            Language = language,
             OriginalTrainerName = tr.OT,
             OriginalTrainerGender = tr.Gender,
             ID32 = tr.ID32,
-            Nickname = SpeciesName.GetSpeciesNameGeneration(Species, lang, Generation),
+            Nickname = SpeciesName.GetSpeciesNameGeneration(Species, language, Generation),
+
+            ReceivedDate = date,
+            ReceivedTime = EncounterDate.GetTime(),
         };
         SetPINGA(pk, criteria, pi);
         pk.ResetHeight();
@@ -56,10 +60,10 @@ public sealed record EncounterSlot7b(EncounterArea7b Parent, ushort Species, byt
         return pk;
     }
 
-    private void SetPINGA(PB7 pk, EncounterCriteria criteria, PersonalInfo7GG pi)
+    private void SetPINGA(PB7 pk, in EncounterCriteria criteria, PersonalInfo7GG pi)
     {
         var rnd = Util.Rand;
-        pk.PID = rnd.Rand32();
+        pk.PID = EncounterUtil.GetRandomPID(pk, rnd, criteria.Shiny);
         pk.EncryptionConstant = rnd.Rand32();
         pk.Nature = criteria.GetNature();
         pk.Gender = criteria.GetGender(pi);
@@ -80,7 +84,15 @@ public sealed record EncounterSlot7b(EncounterArea7b Parent, ushort Species, byt
             return false;
         if (Form != evo.Form)
             return false;
+        if (pk.MetLocation != Parent.Location && !IsCrossoverAllowed(pk.MetLocation))
+            return false;
         return true;
+    }
+
+    private bool IsCrossoverAllowed(ushort metloc)
+    {
+        var bit = metloc == Parent.ToArea1 ? 0b01 : 0b10; // at most 2 locations, we already matched one
+        return (CrossoverFlags & bit) != 0;
     }
 
     public EncounterMatchRating GetMatchRating(PKM pk) => EncounterMatchRating.Match;

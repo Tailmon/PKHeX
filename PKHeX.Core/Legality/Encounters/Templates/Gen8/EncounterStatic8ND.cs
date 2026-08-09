@@ -9,7 +9,7 @@ namespace PKHeX.Core;
 /// Generation 8 Nest Encounter (Distributed Data)
 /// </summary>
 /// <inheritdoc cref="EncounterStatic8Nest{T}"/>
-public sealed record EncounterStatic8ND : EncounterStatic8Nest<EncounterStatic8ND>
+public sealed record EncounterStatic8ND : EncounterStatic8Nest<EncounterStatic8ND>, IEncounterDownlevel
 {
     /// <summary>
     /// Distribution raid index for <see cref="GameVersion.SWSH"/>
@@ -17,7 +17,7 @@ public sealed record EncounterStatic8ND : EncounterStatic8Nest<EncounterStatic8N
     public byte Index { get; }
     public override string Name => $"Distribution Raid Den Encounter - {Index:000}";
 
-    public EncounterStatic8ND(byte lvl, byte dyna, byte flawless, byte index, [ConstantExpected] GameVersion game) : base(game)
+    public EncounterStatic8ND(byte lvl, byte dyna, byte flawless, byte index, [ConstantExpected] GameVersion version) : base(version)
     {
         Level = lvl;
         DynamaxLevel = dyna;
@@ -25,7 +25,7 @@ public sealed record EncounterStatic8ND : EncounterStatic8Nest<EncounterStatic8N
         Index = index;
     }
 
-    public static EncounterStatic8ND Read(ReadOnlySpan<byte> data, [ConstantExpected] GameVersion game)
+    public static EncounterStatic8ND Read(ReadOnlySpan<byte> data, [ConstantExpected] GameVersion version)
     {
         var d = data[13];
         var dlvl = (byte)(d & 0x7F);
@@ -45,7 +45,7 @@ public sealed record EncounterStatic8ND : EncounterStatic8Nest<EncounterStatic8N
         var move4 = ReadUInt16LittleEndian(data[10..]);
         var moves = new Moveset(move1, move2, move3, move4);
 
-        return new EncounterStatic8ND(data[12], dlvl, flawless, data[15], game)
+        return new EncounterStatic8ND(data[12], dlvl, flawless, data[15], version)
         {
             Species = ReadUInt16LittleEndian(data),
             Form = data[2],
@@ -55,6 +55,10 @@ public sealed record EncounterStatic8ND : EncounterStatic8Nest<EncounterStatic8N
             Shiny = shiny,
         };
     }
+
+    private const byte SharedNestMinLevel = 20;
+
+    public byte GetDownleveledMin() => SharedNestMinLevel;
 
     protected override bool IsMatchLevel(PKM pk)
     {
@@ -73,7 +77,7 @@ public sealed record EncounterStatic8ND : EncounterStatic8Nest<EncounterStatic8N
         // Check downleveled (20-55)
         if (lvl > Level)
             return false;
-        if (lvl is < 20 or > 55)
+        if (lvl is < SharedNestMinLevel or > 55)
             return false;
 
         if (lvl % 5 != 0)

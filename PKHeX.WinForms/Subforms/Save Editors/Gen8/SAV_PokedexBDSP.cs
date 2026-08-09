@@ -26,14 +26,13 @@ public partial class SAV_PokedexBDSP : Form
 
         // Fill List
         CB_Species.InitializeBinding();
-        CB_Species.DataSource = new BindingSource(GameInfo.FilteredSources.Species.Skip(1).ToList(), null);
+        CB_Species.DataSource = new BindingSource(GameInfo.FilteredSources.Species.Skip(1).ToList(), string.Empty);
 
         for (int i = 1; i < SAV.MaxSpeciesID + 1; i++)
             LB_Species.Items.Add($"{i:000} - {GameInfo.Strings.specieslist[i]}");
 
         editing = false;
         LB_Species.SelectedIndex = 0;
-        CB_Species.KeyDown += WinFormsUtil.RemoveDropCB;
         CHK_National.Checked = Zukan.HasNationalDex;
     }
 
@@ -182,7 +181,7 @@ public partial class SAV_PokedexBDSP : Form
             Zukan.CompleteDex(ModifierKeys == Keys.Control);
 
         GetEntry();
-        System.Media.SystemSounds.Asterisk.Play();
+        WinFormsUtil.Asterisk();
     }
 
     private void ModifyAllForms(object sender, EventArgs e)

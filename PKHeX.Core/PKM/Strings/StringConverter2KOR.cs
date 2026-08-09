@@ -8,8 +8,12 @@ namespace PKHeX.Core;
 /// </summary>
 public static class StringConverter2KOR
 {
+    // Mail
+    public const byte LineBreakCode = 0x59;
+    public const char LineBreak = StringConverter2.LineBreak;
+
     /// <summary>
-    /// Checks if any of the characters inside <see cref="str"/> are from the special Korean codepoint pages.
+    /// Checks if all of the characters inside <see cref="str"/> are from the special Korean codepoint pages.
     /// </summary>
     public static bool GetIsKorean(ReadOnlySpan<char> str)
     {
@@ -20,6 +24,16 @@ public static class StringConverter2KOR
         }
         return true;
     }
+
+    /// <summary>
+    /// Checks if the encoded data appears to consist of Korean characters.
+    /// </summary>
+    public static bool IsHangul(ReadOnlySpan<byte> data) => data.Length > 0 && data[0] <= 0xB;
+
+    /// <summary>
+    /// Checks if the string appears to consist of Korean characters.
+    /// </summary>
+    public static bool IsHangul(ReadOnlySpan<char> str) => str.Length > 0 && str[0] is (>= (char)0xAC00 and <= (char)0xD7AF) or (>= (char)0x3130 and <= (char)0x318F) or '　';
 
     /// <summary>
     /// Converts Generation 2 Korean encoded data into a string.
@@ -453,6 +467,7 @@ public static class StringConverter2KOR
 
     // In transporter's code, none of these glyphs are legitimately accessible via keyboard.
     private const char NUL = NULL;
+    private const char RET = LineBreak; // Mail, NUL in Transporter
     private static ReadOnlySpan<char> Table0 =>
     [
         NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL,
@@ -460,7 +475,7 @@ public static class StringConverter2KOR
         NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL,
         NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL,
         NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL,
-        NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL,
+        NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, RET, NUL, NUL, NUL, NUL, NUL, NUL,
         NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL,
         NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, ' ',
         'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
